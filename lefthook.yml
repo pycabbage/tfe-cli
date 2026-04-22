@@ -1,0 +1,11 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - run: go test -v ./...
+      glob: "*.go"
+      stage_fixed: true
+
+    - run: go tool golangci-lint run --fix ./...
+      glob:
+        - "*.go"
+      stage_fixed: true

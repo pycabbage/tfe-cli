@@ -120,7 +120,7 @@ func (c *Client) putState(ctx context.Context, url string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
@@ -133,7 +133,7 @@ func (c *Client) pollFinalized(ctx context.Context, svID string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(3 * time.Second):
+		case <-time.After(c.pollInterval):
 		}
 		sv, err := c.GetStateVersion(ctx, svID)
 		if err != nil {

@@ -11,23 +11,25 @@ import (
 	"github.com/pycabbage/tfe-cli/internal/config"
 )
 
-const baseURL = "https://app.terraform.io/api/v2"
-
 type Client struct {
-	http      *http.Client
-	cfg       *config.Config
-	workspace *Workspace
+	http         *http.Client
+	cfg          *config.Config
+	workspace    *Workspace
+	baseURL      string
+	pollInterval time.Duration
 }
 
 func New(cfg *config.Config) *Client {
 	return &Client{
-		http: &http.Client{Timeout: 30 * time.Second},
-		cfg:  cfg,
+		http:         &http.Client{Timeout: 30 * time.Second},
+		cfg:          cfg,
+		baseURL:      "https://app.terraform.io/api/v2",
+		pollInterval: 3 * time.Second,
 	}
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, baseURL+path, body)
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +43,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return parseAPIError(resp)
 	}
@@ -53,7 +55,7 @@ func (c *Client) post(ctx context.Context, path string, body io.Reader, out any)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return parseAPIError(resp)
 	}

@@ -63,7 +63,7 @@ func (c *Client) DownloadState(ctx context.Context, sv *StateVersion) ([]byte, e
 	if err != nil {
 		return nil, fmt.Errorf("downloading state: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
