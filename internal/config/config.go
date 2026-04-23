@@ -25,6 +25,19 @@ func Load() (*Config, error) {
 		Organization:  os.Getenv("TFC_ORGANIZATION"),
 		WorkspaceName: os.Getenv("TFC_WORKSPACE_NAME"),
 	}
+	if store, _ := LoadStore(); store != nil {
+		if p := store.ActiveProfile(); p != nil {
+			if cfg.APIToken == "" {
+				cfg.APIToken = p.APIToken
+			}
+			if cfg.Organization == "" {
+				cfg.Organization = p.Organization
+			}
+			if cfg.WorkspaceName == "" {
+				cfg.WorkspaceName = p.Workspace
+			}
+		}
+	}
 	var errs []error
 	if cfg.APIToken == "" {
 		errs = append(errs, errors.New("TFC_API_TOKEN is not set"))
@@ -38,7 +51,6 @@ func Load() (*Config, error) {
 	return cfg, errors.Join(errs...)
 }
 
-// findDotEnv はカレントディレクトリから上位に向かって .env ファイルを探す。
 func findDotEnv() (string, bool) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -57,14 +69,6 @@ func findDotEnv() (string, bool) {
 	}
 }
 
-// loadDotEnv は .env ファイルをパースし、未設定の環境変数をセットする。
-// 既存の環境変数（空文字含む）は上書きしない。
-//
-// サポート書式:
-//   - KEY=VALUE
-//   - KEY="VALUE" / KEY='VALUE'
-//   - export KEY=VALUE
-//   - # コメント行 / 空行
 func loadDotEnv(path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {

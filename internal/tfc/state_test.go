@@ -59,13 +59,13 @@ func TestListStateVersions_Success(t *testing.T) {
 
 	versions, err := c.ListStateVersions(t.Context())
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(versions) != 2 {
-		t.Errorf("バージョン数: got %d, want 2", len(versions))
+		t.Errorf("version count: got %d, want 2", len(versions))
 	}
 	if versions[0].ID != "sv-001" {
-		t.Errorf("1件目 ID: got %q, want %q", versions[0].ID, "sv-001")
+		t.Errorf("first ID: got %q, want %q", versions[0].ID, "sv-001")
 	}
 }
 
@@ -81,7 +81,7 @@ func TestGetLatestStateVersion_Success(t *testing.T) {
 
 	sv, err := c.GetLatestStateVersion(t.Context())
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if sv.ID != "sv-latest" {
 		t.Errorf("ID: got %q, want %q", sv.ID, "sv-latest")
@@ -103,10 +103,10 @@ func TestGetStateVersion_EmptyID(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "")
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if sv.ID != "sv-latest" {
-		t.Errorf("空ID時に latest が返っていない: got %q", sv.ID)
+		t.Errorf("expected latest for empty ID: got %q", sv.ID)
 	}
 }
 
@@ -122,10 +122,10 @@ func TestGetStateVersion_LatestKeyword(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "latest")
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if sv.ID != "sv-latest" {
-		t.Errorf("'latest' キーワード時に latest が返っていない: got %q", sv.ID)
+		t.Errorf("expected latest for 'latest' keyword: got %q", sv.ID)
 	}
 }
 
@@ -138,7 +138,7 @@ func TestGetStateVersion_SpecificID(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "sv-abc123")
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if sv.ID != "sv-abc123" {
 		t.Errorf("ID: got %q, want %q", sv.ID, "sv-abc123")
@@ -172,14 +172,14 @@ func TestDownloadState_Success(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "sv-dl001")
 	if err != nil {
-		t.Fatalf("StateVersion 取得エラー: %v", err)
+		t.Fatalf("failed to get state version: %v", err)
 	}
 	data, err := c.DownloadState(t.Context(), sv)
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if string(data) != string(stateData) {
-		t.Errorf("データ: got %q, want %q", string(data), string(stateData))
+		t.Errorf("data: got %q, want %q", string(data), string(stateData))
 	}
 }
 
@@ -202,14 +202,14 @@ func TestDownloadState_NoURL(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "sv-nourl")
 	if err != nil {
-		t.Fatalf("StateVersion 取得エラー: %v", err)
+		t.Fatalf("failed to get state version: %v", err)
 	}
 	_, err = c.DownloadState(t.Context(), sv)
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "no download URL") {
-		t.Errorf("エラーメッセージ: got %q", err.Error())
+		t.Errorf("error message: got %q", err.Error())
 	}
 }
 
@@ -238,13 +238,13 @@ func TestDownloadState_HTTPError(t *testing.T) {
 
 	sv, err := c.GetStateVersion(t.Context(), "sv-err001")
 	if err != nil {
-		t.Fatalf("StateVersion 取得エラー: %v", err)
+		t.Fatalf("failed to get state version: %v", err)
 	}
 	_, err = c.DownloadState(t.Context(), sv)
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "downloading state") {
-		t.Errorf("エラーに 'downloading state' が含まれていない: %v", err)
+		t.Errorf("error does not contain 'downloading state': %v", err)
 	}
 }

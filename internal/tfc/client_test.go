@@ -61,7 +61,7 @@ func TestGetWorkspace_Success(t *testing.T) {
 
 	ws, err := c.GetWorkspace(t.Context())
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if ws.ID != "ws-abc123" {
 		t.Errorf("Workspace ID: got %q, want %q", ws.ID, "ws-abc123")
@@ -78,13 +78,13 @@ func TestGetWorkspace_Caching(t *testing.T) {
 	c := newTestClient(t, mux)
 
 	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("1回目: %v", err)
+		t.Fatalf("first call: %v", err)
 	}
 	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("2回目: %v", err)
+		t.Fatalf("second call: %v", err)
 	}
 	if callCount != 1 {
-		t.Errorf("HTTPリクエスト回数: got %d, want 1（2回目はキャッシュから取得）", callCount)
+		t.Errorf("HTTP request count: got %d, want 1 (second call should use cache)", callCount)
 	}
 }
 
@@ -101,6 +101,6 @@ func TestGetWorkspace_Error(t *testing.T) {
 
 	_, err := c.GetWorkspace(t.Context())
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error but got nil")
 	}
 }

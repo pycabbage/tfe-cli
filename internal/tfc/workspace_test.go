@@ -29,20 +29,20 @@ func TestLock_Success(t *testing.T) {
 	})
 	mux.HandleFunc("/workspaces/ws-001/actions/lock", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Errorf("メソッド: got %s, want POST", r.Method)
+			t.Errorf("method: got %s, want POST", r.Method)
 		}
 		writeJSON(w, 200, workspaceResponse("ws-001"))
 	})
 	c := newTestClient(t, mux)
 
 	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
+		t.Fatalf("setup error: %v", err)
 	}
 	if err := c.Lock(t.Context(), "test reason"); err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if c.workspace != nil {
-		t.Error("Lock後にキャッシュがクリアされていない")
+		t.Error("cache not cleared after Lock")
 	}
 }
 
@@ -61,14 +61,14 @@ func TestLock_AlreadyLocked(t *testing.T) {
 	c := newTestClient(t, mux)
 
 	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
+		t.Fatalf("setup error: %v", err)
 	}
 	err := c.Lock(t.Context(), "test")
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "already locked") {
-		t.Errorf("エラーメッセージに 'already locked' が含まれていない: %v", err)
+		t.Errorf("error does not contain 'already locked': %v", err)
 	}
 }
 
@@ -79,20 +79,20 @@ func TestUnlock_Success(t *testing.T) {
 	})
 	mux.HandleFunc("/workspaces/ws-001/actions/unlock", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
-			t.Errorf("メソッド: got %s, want POST", r.Method)
+			t.Errorf("method: got %s, want POST", r.Method)
 		}
 		writeJSON(w, 200, workspaceResponse("ws-001"))
 	})
 	c := newTestClient(t, mux)
 
 	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
+		t.Fatalf("setup error: %v", err)
 	}
 	if err := c.Unlock(t.Context()); err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if c.workspace != nil {
-		t.Error("Unlock後にキャッシュがクリアされていない")
+		t.Error("cache not cleared after Unlock")
 	}
 }
 
@@ -105,7 +105,7 @@ func TestGetCurrentUser_Success(t *testing.T) {
 
 	user, err := c.GetCurrentUser(t.Context())
 	if err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if user.Username != "alice" {
 		t.Errorf("Username: got %q, want %q", user.Username, "alice")
@@ -131,9 +131,9 @@ func TestGetCurrentUser_Error(t *testing.T) {
 
 	_, err := c.GetCurrentUser(t.Context())
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "getting current user") {
-		t.Errorf("エラーメッセージに 'getting current user' が含まれていない: %v", err)
+		t.Errorf("error does not contain 'getting current user': %v", err)
 	}
 }

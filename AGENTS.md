@@ -58,7 +58,7 @@ StateVersions.Upload(ctx, workspaceID, tfe.StateVersionUploadOptions{
 - Standard `testing` package, no assertion library.
 - Mock TFE API with `httptest.NewServer(http.StripPrefix("/api/v2", mux))`.
 - Test helpers in `internal/tfc/client_test.go`: `newTestClient`, `writeJSON`, `workspaceResponse`.
-- Test names and assertion messages are in Japanese.
+- All test names, assertion messages, and user-facing strings must be in English.
 
 ### Mock JSON:API Date Format
 
@@ -74,7 +74,7 @@ The `hashicorp/jsonapi` library (used by go-tfe) strictly requires ISO8601 with 
 
 ## Code Style
 
-- Japanese comments and test messages.
+- All comments, test messages, and user-facing strings must be in English.
 - Error wrapping: `fmt.Errorf("context: %w", err)`.
 - No comments on code (no `// do something` above obvious lines).
 - Cobra `RunE` (not `Run`) on all commands; `SilenceUsage: true` + `SilenceErrors: true` on root.

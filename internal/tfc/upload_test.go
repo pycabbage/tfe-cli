@@ -18,7 +18,7 @@ func writeTempState(t *testing.T, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "test.tfstate")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-		t.Fatalf("テンプファイル作成: %v", err)
+		t.Fatalf("creating temp file: %v", err)
 	}
 	return path
 }
@@ -82,17 +82,17 @@ func TestUploadState_FileNotFound(t *testing.T) {
 	c := newTestClient(t, http.NewServeMux())
 	err := c.UploadState(t.Context(), "/nonexistent/path/test.tfstate")
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "reading state file") {
-		t.Errorf("エラーに 'reading state file' が含まれていない: %v", err)
+		t.Errorf("error does not contain 'reading state file': %v", err)
 	}
 }
 
 func TestUploadState_Success(t *testing.T) {
 	uploadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
-			t.Errorf("PUT メソッド期待: got %s", r.Method)
+			t.Errorf("expected PUT method: got %s", r.Method)
 		}
 		w.WriteHeader(200)
 	}))
@@ -119,13 +119,13 @@ func TestUploadState_Success(t *testing.T) {
 
 	c := newTestClient(t, mux)
 	if err := c.UploadState(t.Context(), writeTempState(t, testStateJSON)); err != nil {
-		t.Fatalf("予期しないエラー: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if *pollCount < 2 {
-		t.Errorf("ポーリング回数: got %d, want >= 2", *pollCount)
+		t.Errorf("poll count: got %d, want >= 2", *pollCount)
 	}
 	if !unlockCalled {
-		t.Error("Unlock が呼ばれなかった")
+		t.Error("Unlock was not called")
 	}
 }
 
@@ -147,10 +147,10 @@ func TestUploadState_LockFailed(t *testing.T) {
 
 	c := newTestClient(t, mux)
 	if err := c.UploadState(t.Context(), writeTempState(t, testStateJSON)); err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if unlockCalled {
-		t.Error("Lock が失敗したのに Unlock が呼ばれた")
+		t.Error("Unlock was called despite Lock failure")
 	}
 }
 
@@ -166,13 +166,13 @@ func TestUploadState_CreateStateVersionFailed(t *testing.T) {
 	c := newTestClient(t, mux)
 	err := c.UploadState(t.Context(), writeTempState(t, testStateJSON))
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !strings.Contains(err.Error(), "creating state version") {
-		t.Errorf("エラーに 'creating state version' が含まれていない: %v", err)
+		t.Errorf("error does not contain 'creating state version': %v", err)
 	}
 	if !unlockCalled {
-		t.Error("Lock 後のエラーで Unlock が呼ばれなかった（defer）")
+		t.Error("Unlock was not called after Lock error (defer)")
 	}
 }
 
@@ -205,12 +205,12 @@ func TestUploadState_FinalizationTimeout(t *testing.T) {
 
 	err := c.UploadState(ctx, writeTempState(t, testStateJSON))
 	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
+		t.Fatal("expected error, got nil")
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Errorf("エラーが context.DeadlineExceeded でない: %v", err)
+		t.Errorf("error is not context.DeadlineExceeded: %v", err)
 	}
 	if !unlockCalled {
-		t.Error("タイムアウト後に Unlock が呼ばれなかった（defer）")
+		t.Error("Unlock was not called after timeout (defer)")
 	}
 }

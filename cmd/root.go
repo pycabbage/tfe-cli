@@ -14,6 +14,9 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if isAuthCommand(cmd) {
+			return nil
+		}
 		cfg, err := config.Load()
 		if err != nil {
 			return err
@@ -28,7 +31,16 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(stateCmd)
 	rootCmd.AddCommand(actionsCmd)
+}
+
+func isAuthCommand(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		if c.Name() == "auth" {
+			return true
+		}
+	}
+	return false
 }
