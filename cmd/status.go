@@ -13,21 +13,20 @@ var statusCmd = &cobra.Command{
 	Short: "Check authentication status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		details, err := client.GetAccountDetails(ctx)
+		user, err := client.GetCurrentUser(ctx)
 		if err != nil {
 			return fmt.Errorf("authentication failed: %w", err)
 		}
 
 		cfg, _ := config.Load()
-		attrs := details.Data.Attributes
 		twoFA := "disabled"
-		if attrs.TwoFactor.Enabled {
+		if user.TwoFactor != nil && user.TwoFactor.Enabled {
 			twoFA = "enabled"
 		}
 
 		output.PrintKV([][2]string{
-			{"Username", attrs.Username},
-			{"Email", attrs.Email},
+			{"Username", user.Username},
+			{"Email", user.Email},
 			{"Two-Factor Auth", twoFA},
 			{"Organization", cfg.Organization},
 			{"Workspace", cfg.WorkspaceName},

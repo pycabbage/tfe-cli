@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/pycabbage/tfe-cli/internal/output"
@@ -26,17 +25,13 @@ var stateShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		a := sv.Attributes
 		output.PrintKV([][2]string{
 			{"ID", sv.ID},
-			{"Serial", strconv.FormatInt(a.Serial, 10)},
-			{"Status", a.Status},
-			{"Finalized", strconv.FormatBool(a.Finalized)},
-			{"Terraform Version", a.TerraformVersion},
-			{"Lineage", a.Lineage},
-			{"Created At", a.CreatedAt.Format("2006-01-02 15:04:05")},
-			{"Created By", a.CreatedBy.Username},
-			{"Download URL", a.DownloadURL},
+			{"Serial", fmt.Sprintf("%d", sv.Serial)},
+			{"Status", string(sv.Status)},
+			{"Terraform Version", sv.TerraformVersion},
+			{"Created At", sv.CreatedAt.Format("2006-01-02 15:04:05")},
+			{"Download URL", sv.DownloadURL},
 		})
 		return nil
 	},

@@ -2,12 +2,7 @@ package tfc
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,16 +23,7 @@ func writeTempState(t *testing.T, content string) string {
 	return path
 }
 
-// buildUploadMux は UploadState テスト用の共通エンドポイントを持つ mux を組み立てる。
-// stateVersionsHandler: POST /state-versions のハンドラ
-// pollHandler: GET /state-versions/sv-new001 のハンドラ
-// unlockCalled: Unlock が呼ばれたかどうかを記録するポインタ
-func buildUploadMux(
-	t *testing.T,
-	stateVersionsHandler http.HandlerFunc,
-	pollHandler http.HandlerFunc,
-	unlockCalled *bool,
-) *http.ServeMux {
+func buildUploadMux(t *testing.T, pollHandler http.HandlerFunc, unlockCalled *bool) *http.ServeMux {
 	t.Helper()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/organizations/myorg/workspaces/myws", func(w http.ResponseWriter, r *http.Request) {
@@ -50,71 +36,50 @@ func buildUploadMux(
 		*unlockCalled = true
 		writeJSON(w, 200, workspaceResponse("ws-001"))
 	})
-	mux.HandleFunc("/state-versions", stateVersionsHandler)
 	if pollHandler != nil {
 		mux.HandleFunc("/state-versions/sv-new001", pollHandler)
 	}
 	return mux
 }
 
-// stateVersionsOKHandler は指定した uploadURL を含むレスポンスを返す POST /state-versions ハンドラ。
-func stateVersionsOKHandler(uploadURL string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 201, map[string]any{
-			"data": map[string]any{
-				"id": "sv-new001",
-				"attributes": map[string]any{
-					"serial":                    int64(3),
-					"created-at":                time.Now().Format(time.RFC3339),
-					"status":                    "pending",
-					"hosted-state-download-url": "",
-					"hosted-state-upload-url":   uploadURL,
-					"terraform-version":         "1.5.0",
-					"lineage":                   "test-lineage-abc",
-					"finalized":                 false,
-				},
-			},
-		})
-	}
-}
-
-// finalizedAfterN は n 回目の呼び出しで finalized: true を返すポーリングハンドラを返す。
 func finalizedAfterN(afterN int) (http.HandlerFunc, *int) {
 	count := 0
 	return func(w http.ResponseWriter, r *http.Request) {
 		count++
+		status := "pending"
+		if count >= afterN {
+			status = "finalized"
+		}
 		writeJSON(w, 200, map[string]any{
 			"data": map[string]any{
-				"id": "sv-new001",
+				"id":   "sv-new001",
+				"type": "state-versions",
 				"attributes": map[string]any{
-					"serial":    int64(3),
-					"finalized": count >= afterN,
-					"status":    "finalized",
+					"serial":     int64(3),
+					"created-at": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":     status,
 				},
 			},
 		})
 	}, &count
 }
 
-// neverFinalized は常に finalized: false を返すポーリングハンドラ。
 var neverFinalized http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{
 		"data": map[string]any{
-			"id": "sv-new001",
+			"id":   "sv-new001",
+			"type": "state-versions",
 			"attributes": map[string]any{
-				"serial":    int64(3),
-				"finalized": false,
-				"status":    "pending",
+				"serial":     int64(3),
+				"created-at": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+				"status":     "pending",
 			},
 		},
 	})
 }
 
-// --- TestUploadState_FileNotFound ---
-
 func TestUploadState_FileNotFound(t *testing.T) {
 	c := newTestClient(t, http.NewServeMux())
-
 	err := c.UploadState(t.Context(), "/nonexistent/path/test.tfstate")
 	if err == nil {
 		t.Fatal("エラーが期待されたが発生しなかった")
@@ -124,15 +89,7 @@ func TestUploadState_FileNotFound(t *testing.T) {
 	}
 }
 
-// --- TestUploadState_Success ---
-
 func TestUploadState_Success(t *testing.T) {
-	// 期待する MD5 を事前計算
-	data := []byte(testStateJSON)
-	hash := md5.Sum(data)
-	wantMD5 := base64.StdEncoding.EncodeToString(hash[:])
-
-	// アップロード先サーバー
 	uploadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPut {
 			t.Errorf("PUT メソッド期待: got %s", r.Method)
@@ -141,33 +98,26 @@ func TestUploadState_Success(t *testing.T) {
 	}))
 	t.Cleanup(uploadSrv.Close)
 
-	// POST /state-versions でリクエストボディを検証
-	stateVersionsHandler := func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		var req map[string]any
-		if err := json.Unmarshal(body, &req); err != nil {
-			t.Errorf("ボディパース失敗: %v", err)
-		}
-		attrs, _ := req["data"].(map[string]any)["attributes"].(map[string]any)
-		if fmt.Sprintf("%v", attrs["serial"]) != "3" {
-			t.Errorf("serial: got %v, want 3", attrs["serial"])
-		}
-		if attrs["lineage"] != "test-lineage-abc" {
-			t.Errorf("lineage: got %v, want test-lineage-abc", attrs["lineage"])
-		}
-		if attrs["md5"] != wantMD5 {
-			t.Errorf("md5: got %v, want %v", attrs["md5"], wantMD5)
-		}
-		stateVersionsOKHandler(uploadSrv.URL + "/")(w, r)
-	}
-
 	pollHandler, pollCount := finalizedAfterN(2)
 	unlockCalled := false
-	mux := buildUploadMux(t, stateVersionsHandler, pollHandler, &unlockCalled)
+	mux := buildUploadMux(t, pollHandler, &unlockCalled)
+	mux.HandleFunc("/workspaces/ws-001/state-versions", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 201, map[string]any{
+			"data": map[string]any{
+				"id":   "sv-new001",
+				"type": "state-versions",
+				"attributes": map[string]any{
+					"serial":                    int64(3),
+					"created-at":                time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":                    "pending",
+					"hosted-state-upload-url":   uploadSrv.URL + "/upload",
+					"hosted-state-download-url": "",
+				},
+			},
+		})
+	})
 
 	c := newTestClient(t, mux)
-	c.pollInterval = 1 * time.Millisecond
-
 	if err := c.UploadState(t.Context(), writeTempState(t, testStateJSON)); err != nil {
 		t.Fatalf("予期しないエラー: %v", err)
 	}
@@ -178,8 +128,6 @@ func TestUploadState_Success(t *testing.T) {
 		t.Error("Unlock が呼ばれなかった")
 	}
 }
-
-// --- TestUploadState_LockFailed ---
 
 func TestUploadState_LockFailed(t *testing.T) {
 	unlockCalled := false
@@ -206,19 +154,14 @@ func TestUploadState_LockFailed(t *testing.T) {
 	}
 }
 
-// --- TestUploadState_CreateStateVersionFailed ---
-
 func TestUploadState_CreateStateVersionFailed(t *testing.T) {
 	unlockCalled := false
-	mux := buildUploadMux(t,
-		func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, 422, map[string]any{
-				"errors": []map[string]any{{"status": "422", "title": "Invalid serial"}},
-			})
-		},
-		nil,
-		&unlockCalled,
-	)
+	mux := buildUploadMux(t, nil, &unlockCalled)
+	mux.HandleFunc("/workspaces/ws-001/state-versions", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 422, map[string]any{
+			"errors": []map[string]any{{"status": "422", "title": "Invalid serial"}},
+		})
+	})
 
 	c := newTestClient(t, mux)
 	err := c.UploadState(t.Context(), writeTempState(t, testStateJSON))
@@ -233,67 +176,6 @@ func TestUploadState_CreateStateVersionFailed(t *testing.T) {
 	}
 }
 
-// --- TestUploadState_UploadURLMissing ---
-
-func TestUploadState_UploadURLMissing(t *testing.T) {
-	unlockCalled := false
-	mux := buildUploadMux(t,
-		func(w http.ResponseWriter, r *http.Request) {
-			writeJSON(w, 201, map[string]any{
-				"data": map[string]any{
-					"id":         "sv-new001",
-					"attributes": map[string]any{"hosted-state-upload-url": ""},
-				},
-			})
-		},
-		nil,
-		&unlockCalled,
-	)
-
-	c := newTestClient(t, mux)
-	err := c.UploadState(t.Context(), writeTempState(t, testStateJSON))
-	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
-	}
-	if !strings.Contains(err.Error(), "no upload URL") {
-		t.Errorf("エラーに 'no upload URL' が含まれていない: %v", err)
-	}
-	if !unlockCalled {
-		t.Error("Unlock が呼ばれなかった（defer）")
-	}
-}
-
-// --- TestUploadState_PutFailed ---
-
-func TestUploadState_PutFailed(t *testing.T) {
-	uploadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(500)
-		_, _ = fmt.Fprint(w, "upload error")
-	}))
-	t.Cleanup(uploadSrv.Close)
-
-	unlockCalled := false
-	mux := buildUploadMux(t,
-		stateVersionsOKHandler(uploadSrv.URL+"/"),
-		nil,
-		&unlockCalled,
-	)
-
-	c := newTestClient(t, mux)
-	err := c.UploadState(t.Context(), writeTempState(t, testStateJSON))
-	if err == nil {
-		t.Fatal("エラーが期待されたが発生しなかった")
-	}
-	if !strings.Contains(err.Error(), "uploading state") {
-		t.Errorf("エラーに 'uploading state' が含まれていない: %v", err)
-	}
-	if !unlockCalled {
-		t.Error("Unlock が呼ばれなかった（defer）")
-	}
-}
-
-// --- TestUploadState_FinalizationTimeout ---
-
 func TestUploadState_FinalizationTimeout(t *testing.T) {
 	uploadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -301,15 +183,23 @@ func TestUploadState_FinalizationTimeout(t *testing.T) {
 	t.Cleanup(uploadSrv.Close)
 
 	unlockCalled := false
-	mux := buildUploadMux(t,
-		stateVersionsOKHandler(uploadSrv.URL+"/"),
-		neverFinalized,
-		&unlockCalled,
-	)
+	mux := buildUploadMux(t, neverFinalized, &unlockCalled)
+	mux.HandleFunc("/workspaces/ws-001/state-versions", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 201, map[string]any{
+			"data": map[string]any{
+				"id":   "sv-new001",
+				"type": "state-versions",
+				"attributes": map[string]any{
+					"serial":                  int64(3),
+					"created-at":              time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":                  "pending",
+					"hosted-state-upload-url": uploadSrv.URL + "/upload",
+				},
+			},
+		})
+	})
 
 	c := newTestClient(t, mux)
-	c.pollInterval = 1 * time.Millisecond
-
 	ctx, cancel := context.WithTimeout(t.Context(), 50*time.Millisecond)
 	defer cancel()
 

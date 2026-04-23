@@ -1,7 +1,6 @@
 package tfc
 
 import (
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,16 +11,14 @@ import (
 func stateVersionResponse(id string, serial int64) any {
 	return map[string]any{
 		"data": map[string]any{
-			"id": id,
+			"id":   id,
+			"type": "state-versions",
 			"attributes": map[string]any{
 				"serial":                    serial,
-				"created-at":                time.Now().Format(time.RFC3339),
+				"created-at":                time.Now().UTC().Format("2006-01-02T15:04:05Z"),
 				"status":                    "finalized",
 				"hosted-state-download-url": "https://example.com/state/" + id,
-				"hosted-state-upload-url":   "",
 				"terraform-version":         "1.5.0",
-				"lineage":                   "abc-lineage",
-				"finalized":                 true,
 			},
 		},
 	}
@@ -31,32 +28,34 @@ func stateVersionListResponse(ids []string) any {
 	data := make([]map[string]any, len(ids))
 	for i, id := range ids {
 		data[i] = map[string]any{
-			"id": id,
+			"id":   id,
+			"type": "state-versions",
 			"attributes": map[string]any{
 				"serial":     int64(i + 1),
-				"created-at": time.Now().Format(time.RFC3339),
+				"created-at": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
 				"status":     "finalized",
 			},
 		}
 	}
-	return map[string]any{"data": data}
+	return map[string]any{
+		"data": data,
+		"meta": map[string]any{
+			"pagination": map[string]any{
+				"current-page": 1,
+				"page-size":    10,
+				"total-pages":  1,
+				"total-count":  len(ids),
+			},
+		},
+	}
 }
-
-// --- ListStateVersions ---
 
 func TestListStateVersions_Success(t *testing.T) {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/organizations/myorg/workspaces/myws", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, workspaceResponse("ws-001"))
-	})
-	mux.HandleFunc("/workspaces/ws-001/state-versions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/state-versions", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, stateVersionListResponse([]string{"sv-001", "sv-002"}))
 	})
 	c := newTestClient(t, mux)
-
-	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
-	}
 
 	versions, err := c.ListStateVersions(t.Context())
 	if err != nil {
@@ -70,8 +69,6 @@ func TestListStateVersions_Success(t *testing.T) {
 	}
 }
 
-// --- GetLatestStateVersion ---
-
 func TestGetLatestStateVersion_Success(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/organizations/myorg/workspaces/myws", func(w http.ResponseWriter, r *http.Request) {
@@ -82,10 +79,6 @@ func TestGetLatestStateVersion_Success(t *testing.T) {
 	})
 	c := newTestClient(t, mux)
 
-	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
-	}
-
 	sv, err := c.GetLatestStateVersion(t.Context())
 	if err != nil {
 		t.Fatalf("予期しないエラー: %v", err)
@@ -93,12 +86,10 @@ func TestGetLatestStateVersion_Success(t *testing.T) {
 	if sv.ID != "sv-latest" {
 		t.Errorf("ID: got %q, want %q", sv.ID, "sv-latest")
 	}
-	if sv.Attributes.Serial != 5 {
-		t.Errorf("Serial: got %d, want 5", sv.Attributes.Serial)
+	if sv.Serial != 5 {
+		t.Errorf("Serial: got %d, want 5", sv.Serial)
 	}
 }
-
-// --- GetStateVersion ---
 
 func TestGetStateVersion_EmptyID(t *testing.T) {
 	mux := http.NewServeMux()
@@ -109,10 +100,6 @@ func TestGetStateVersion_EmptyID(t *testing.T) {
 		writeJSON(w, 200, stateVersionResponse("sv-latest", 3))
 	})
 	c := newTestClient(t, mux)
-
-	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
-	}
 
 	sv, err := c.GetStateVersion(t.Context(), "")
 	if err != nil {
@@ -132,10 +119,6 @@ func TestGetStateVersion_LatestKeyword(t *testing.T) {
 		writeJSON(w, 200, stateVersionResponse("sv-latest", 3))
 	})
 	c := newTestClient(t, mux)
-
-	if _, err := c.GetWorkspace(t.Context()); err != nil {
-		t.Fatalf("前処理エラー: %v", err)
-	}
 
 	sv, err := c.GetStateVersion(t.Context(), "latest")
 	if err != nil {
@@ -162,8 +145,6 @@ func TestGetStateVersion_SpecificID(t *testing.T) {
 	}
 }
 
-// --- DownloadState ---
-
 func TestDownloadState_Success(t *testing.T) {
 	stateData := []byte(`{"version":4,"serial":1}`)
 	downloadSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -172,17 +153,27 @@ func TestDownloadState_Success(t *testing.T) {
 	}))
 	defer downloadSrv.Close()
 
-	sv := &StateVersion{
-		ID: "sv-001",
-		Attributes: StateVersionAttrs{
-			DownloadURL: downloadSrv.URL + "/state",
-		},
-	}
-
 	mux := http.NewServeMux()
+	mux.HandleFunc("/state-versions/sv-dl001", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"id":   "sv-dl001",
+				"type": "state-versions",
+				"attributes": map[string]any{
+					"serial":                    int64(1),
+					"created-at":                time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":                    "finalized",
+					"hosted-state-download-url": downloadSrv.URL + "/state",
+				},
+			},
+		})
+	})
 	c := newTestClient(t, mux)
-	c.http = downloadSrv.Client()
 
+	sv, err := c.GetStateVersion(t.Context(), "sv-dl001")
+	if err != nil {
+		t.Fatalf("StateVersion 取得エラー: %v", err)
+	}
 	data, err := c.DownloadState(t.Context(), sv)
 	if err != nil {
 		t.Fatalf("予期しないエラー: %v", err)
@@ -193,15 +184,27 @@ func TestDownloadState_Success(t *testing.T) {
 }
 
 func TestDownloadState_NoURL(t *testing.T) {
-	sv := &StateVersion{
-		ID:         "sv-001",
-		Attributes: StateVersionAttrs{},
-	}
-
 	mux := http.NewServeMux()
+	mux.HandleFunc("/state-versions/sv-nourl", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"id":   "sv-nourl",
+				"type": "state-versions",
+				"attributes": map[string]any{
+					"serial":     int64(1),
+					"created-at": time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":     "pending",
+				},
+			},
+		})
+	})
 	c := newTestClient(t, mux)
 
-	_, err := c.DownloadState(t.Context(), sv)
+	sv, err := c.GetStateVersion(t.Context(), "sv-nourl")
+	if err != nil {
+		t.Fatalf("StateVersion 取得エラー: %v", err)
+	}
+	_, err = c.DownloadState(t.Context(), sv)
 	if err == nil {
 		t.Fatal("エラーが期待されたが発生しなかった")
 	}
@@ -216,22 +219,32 @@ func TestDownloadState_HTTPError(t *testing.T) {
 	}))
 	defer downloadSrv.Close()
 
-	sv := &StateVersion{
-		ID: "sv-001",
-		Attributes: StateVersionAttrs{
-			DownloadURL: downloadSrv.URL + "/state",
-		},
-	}
-
 	mux := http.NewServeMux()
+	mux.HandleFunc("/state-versions/sv-err001", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, map[string]any{
+			"data": map[string]any{
+				"id":   "sv-err001",
+				"type": "state-versions",
+				"attributes": map[string]any{
+					"serial":                    int64(1),
+					"created-at":                time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+					"status":                    "finalized",
+					"hosted-state-download-url": downloadSrv.URL + "/state",
+				},
+			},
+		})
+	})
 	c := newTestClient(t, mux)
-	c.http = downloadSrv.Client()
 
-	_, err := c.DownloadState(t.Context(), sv)
+	sv, err := c.GetStateVersion(t.Context(), "sv-err001")
+	if err != nil {
+		t.Fatalf("StateVersion 取得エラー: %v", err)
+	}
+	_, err = c.DownloadState(t.Context(), sv)
 	if err == nil {
 		t.Fatal("エラーが期待されたが発生しなかった")
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("%d", 404)) {
-		t.Errorf("エラーに HTTP 404 が含まれていない: %v", err)
+	if !strings.Contains(err.Error(), "downloading state") {
+		t.Errorf("エラーに 'downloading state' が含まれていない: %v", err)
 	}
 }

@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/pycabbage/tfe-cli/internal/output"
 	"github.com/spf13/cobra"
-	"strconv"
 )
 
 var stateListCmd = &cobra.Command{
@@ -16,14 +17,14 @@ var stateListCmd = &cobra.Command{
 			return err
 		}
 
-		headers := []string{"ID", "SERIAL", "CREATED AT", "CREATED BY"}
+		headers := []string{"ID", "SERIAL", "CREATED AT", "STATUS"}
 		rows := make([][]string, 0, len(versions))
 		for _, sv := range versions {
 			rows = append(rows, []string{
 				sv.ID,
-				strconv.FormatInt(sv.Attributes.Serial, 10),
-				sv.Attributes.CreatedAt.Format("2006-01-02 15:04:05"),
-				sv.Attributes.CreatedBy.Username,
+				fmt.Sprintf("%d", sv.Serial),
+				sv.CreatedAt.Format("2006-01-02 15:04:05"),
+				string(sv.Status),
 			})
 		}
 		output.PrintTable(headers, rows)

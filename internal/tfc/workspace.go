@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	tfe "github.com/hashicorp/go-tfe"
 )
 
 func (c *Client) Lock(ctx context.Context, reason string) error {
@@ -11,14 +13,16 @@ func (c *Client) Lock(ctx context.Context, reason string) error {
 	if err != nil {
 		return err
 	}
-	body := strings.NewReader(fmt.Sprintf(`{"reason":"%s"}`, reason))
-	if err := c.post(ctx, "/workspaces/"+ws.ID+"/actions/lock", body, nil); err != nil {
+	_, err = c.tfe.Workspaces.Lock(ctx, ws.ID, tfe.WorkspaceLockOptions{
+		Reason: tfe.String(reason),
+	})
+	if err != nil {
 		if strings.Contains(err.Error(), "locked") {
 			return fmt.Errorf("workspace is already locked by another user")
 		}
 		return fmt.Errorf("locking workspace: %w", err)
 	}
-	c.workspace = nil // キャッシュをクリア
+	c.workspace = nil
 	return nil
 }
 
@@ -27,17 +31,18 @@ func (c *Client) Unlock(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := c.post(ctx, "/workspaces/"+ws.ID+"/actions/unlock", nil, nil); err != nil {
+	_, err = c.tfe.Workspaces.Unlock(ctx, ws.ID)
+	if err != nil {
 		return fmt.Errorf("unlocking workspace: %w", err)
 	}
-	c.workspace = nil // キャッシュをクリア
+	c.workspace = nil
 	return nil
 }
 
-func (c *Client) GetAccountDetails(ctx context.Context) (*AccountDetails, error) {
-	var result AccountDetails
-	if err := c.get(ctx, "/account/details", &result); err != nil {
-		return nil, fmt.Errorf("getting account details: %w", err)
+func (c *Client) GetCurrentUser(ctx context.Context) (*tfe.User, error) {
+	user, err := c.tfe.Users.ReadCurrent(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("getting current user: %w", err)
 	}
-	return &result, nil
+	return user, nil
 }

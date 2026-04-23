@@ -18,8 +18,8 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		client = tfc.New(cfg)
-		return nil
+		client, err = tfc.New(cfg)
+		return err
 	},
 }
 
