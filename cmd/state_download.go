@@ -37,7 +37,7 @@ var stateDownloadCmd = &cobra.Command{
 		outFile := downloadOutput
 		if outFile == "" {
 			if id == "latest" {
-				outFile = "latest.tfstate"
+				outFile = "terraform.tfstate"
 			} else {
 				outFile = id + ".tfstate"
 			}
