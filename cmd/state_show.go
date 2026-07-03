@@ -25,10 +25,15 @@ var stateShowCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		runID := "(none)"
+		if sv.Run != nil {
+			runID = sv.Run.ID
+		}
 		output.PrintKV([][2]string{
 			{"ID", sv.ID},
 			{"Serial", fmt.Sprintf("%d", sv.Serial)},
 			{"Status", string(sv.Status)},
+			{"Run ID", runID},
 			{"Terraform Version", sv.TerraformVersion},
 			{"Created At", sv.CreatedAt.Format("2006-01-02 15:04:05")},
 			{"Download URL", sv.DownloadURL},

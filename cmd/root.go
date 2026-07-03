@@ -33,6 +33,7 @@ func Execute() error {
 func init() {
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(stateCmd)
+	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(actionsCmd)
 }
 
