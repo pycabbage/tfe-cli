@@ -17,7 +17,7 @@ CI runs `go build -v ./...` then `go test -v ./...` on every PR.
 ## Architecture
 
 ```
-main.go → cmd.Execute()
+cmd/tfe/main.go → cmd.Execute()
   rootCmd.PersistentPreRunE:
     config.Load()  → reads TFC_API_TOKEN, TFC_ORGANIZATION, TFC_WORKSPACE_NAME (env + .env)
     tfc.New(cfg)   → wraps *tfe.Client (hashicorp/go-tfe v1.103.0)

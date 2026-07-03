@@ -2,6 +2,14 @@
 
 HCP Terraform の state を管理する CLI ツール。
 
+## インストール
+
+```
+go install github.com/pycabbage/tfe-cli/cmd/tfe@latest
+```
+
+もしくは、 [Releases](https://github.com/pycabbage/tfe-cli/releases/latest) からインストールすることもできます。
+
 ## 環境変数
 
 | 変数名 | 説明 |

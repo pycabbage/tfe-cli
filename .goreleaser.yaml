@@ -10,7 +10,7 @@ before:
 project_name: tfe
 
 builds:
-  - main: .
+  - main: ./cmd/tfe
     env:
       - CGO_ENABLED=0
     goos:
