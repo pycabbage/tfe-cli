@@ -7,7 +7,7 @@ tool github.com/evilmartians/lefthook/v2
 tool github.com/golangci/golangci-lint/cmd/golangci-lint
 
 require (
-	github.com/hashicorp/go-tfe v1.109.0
+	github.com/hashicorp/go-tfe v1.111.2
 	github.com/spf13/cobra v1.10.2
 	golang.org/x/term v0.45.0
 	gopkg.in/yaml.v3 v3.0.1
